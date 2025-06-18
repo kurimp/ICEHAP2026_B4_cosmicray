@@ -39,8 +39,6 @@ with open(BG_filename) as BG:
   Mean_BG = float(l[1][2])
   Std_BG = float(l[1][3])
 
-df_sim = pd.read_csv(sim_filename, sep='\t', header = 0)
-
 #実験結果のフレームについて、xとzを参照し、cosθの平均と標準偏差、立体角の平均と標準偏差を追記。
 df_res = pd.merge(df_res, df_sim[['plate1_move_x(cm)', 'plate1_move_z(cm)', 'Mean_CosTheta_CosSquaredTheta', 'Std_CosTheta_CosSquaredTheta', 'Mean_SolidAngle_CosSquaredTheta(sr)', 'Std_SolidAngle_CosSquaredTheta(sr)']], left_on=['x(cm)', 'h(cm)'], right_on = ['plate1_move_x(cm)', 'plate1_move_z(cm)'], how='left')
 
@@ -86,9 +84,9 @@ def model02(x, a, b):
 def model03(x, b):
   return b * np.power(x, 2)
 
-popt01, pcov01 = curve_fit(model01, df_res['Mean_CosTheta_CosSquaredTheta'], df_res["Mean_Flux"], p0=[0, 0.005, 2], maxfev=50000)
-popt02, pcov02 = curve_fit(model02, df_res['Mean_CosTheta_CosSquaredTheta'], df_res["Mean_Flux"], p0=[0.001, 0.005], maxfev=50000)
-popt03, pcov03 = curve_fit(model03, df_res['Mean_CosTheta_CosSquaredTheta'], df_res["Mean_Flux"], p0=0.005, maxfev=50000)
+popt01, pcov01 = curve_fit(model01, df_res['Mean_CosTheta_CosSquaredTheta'], df_res["Mean_Flux"], sigma = df_res["Std_Flux"], p0=[0, 0.005, 2], maxfev=50000,absolute_sigma=True)
+popt02, pcov02 = curve_fit(model02, df_res['Mean_CosTheta_CosSquaredTheta'], df_res["Mean_Flux"], sigma = df_res["Std_Flux"], p0=[0.001, 0.005], maxfev=50000,absolute_sigma=True)
+popt03, pcov03 = curve_fit(model03, df_res['Mean_CosTheta_CosSquaredTheta'], df_res["Mean_Flux"], sigma = df_res["Std_Flux"], p0=0.005, maxfev=50000,absolute_sigma=True)
 
 a01 = float(f"{popt01[0]:.4f}")
 b01 = float(f"{popt01[1]:.4f}")
@@ -99,6 +97,35 @@ b02 = float(f"{popt02[1]:.4f}")
 
 b03 = float(f"{popt03[0]:.4f}")
 
+err01 = np.sqrt(np.diag(pcov01))
+err02 = np.sqrt(np.diag(pcov02))
+err03 = np.sqrt(np.diag(pcov03))
+
+# データ点の数 N
+N = len(df_res['Mean_CosTheta_CosSquaredTheta'])
+# フィットパラメータの数 P
+P01 = 3
+P02 = 2
+P03 = 1
+
+# フィットされたモデルからの予測値を計算
+y_predicted_01 = model01(df_res['Mean_CosTheta_CosSquaredTheta'], *popt01)
+y_predicted_02 = model02(df_res['Mean_CosTheta_CosSquaredTheta'], *popt02)
+y_predicted_03 = model03(df_res['Mean_CosTheta_CosSquaredTheta'], *popt03)
+
+# chi^2 の計算
+chi_squared_01 = np.sum(((df_res["Mean_Flux"] - y_predicted_01) / df_res["Std_Flux"])**2)
+chi_squared_02 = np.sum(((df_res["Mean_Flux"] - y_predicted_02) / df_res["Std_Flux"])**2)
+chi_squared_03 = np.sum(((df_res["Mean_Flux"] - y_predicted_03) / df_res["Std_Flux"])**2)
+
+# 自由度あたりの chi^2 (reduced chi-squared) の計算
+degrees_of_freedom_01 = N - P01
+degrees_of_freedom_02 = N - P02
+degrees_of_freedom_03 = N - P03
+reduced_chi_squared_01 = chi_squared_01 / degrees_of_freedom_01
+reduced_chi_squared_02 = chi_squared_02 / degrees_of_freedom_02
+reduced_chi_squared_03 = chi_squared_03 / degrees_of_freedom_03
+
 #グラフの生成
 plt.figure(figsize=(12, 6)) # グラフのサイズを調整
 plt.style.use("ggplot")
@@ -108,11 +135,9 @@ plt.errorbar(df_res['Mean_CosTheta_CosSquaredTheta'], df_res["Mean_Flux"], xerr=
 plt.scatter(df_res_h10['Mean_CosTheta_CosSquaredTheta'], df_res_h10["Mean_Flux"], marker = "x", label="Mean(h=10cm)")
 plt.scatter(df_res_h325['Mean_CosTheta_CosSquaredTheta'], df_res_h325["Mean_Flux"], marker = "x", label="Mean(h=32.5cm)")
 
-
-
-plt.plot(np.linspace(0, 1, 10000), model01(np.linspace(0, 1, 10000), a01, b01, n01), linewidth=0.5,label=f'Fitted Curve: Flux={a01}+{b01}(cosθ)^{n01}')
-plt.plot(np.linspace(0, 1, 10000), model02(np.linspace(0, 1, 10000), a02, b02), linewidth=0.5,label=f'Fitted Curve: Flux={a02}+{b02}(cosθ)^2')
-plt.plot(np.linspace(0, 1, 10000), model03(np.linspace(0, 1, 10000), b03), linewidth=0.5,label=f'Fitted Curve: Flux={b03}(cosθ)^2')
+plt.plot(np.linspace(0, 1, 10000), model01(np.linspace(0, 1, 10000), a01, b01, n01), linewidth=0.5,label=f'Fitted Curve: Flux=({a01:.4f}±{err01[0]:.4f}) + ({b01:.4f}±{err01[1]:.4f})(cosθ)^({n01:.4f}±{err01[2]:.4f}) (reduced χ^2:{reduced_chi_squared_01:.1f})')
+plt.plot(np.linspace(0, 1, 10000), model02(np.linspace(0, 1, 10000), a02, b02), linewidth=0.5, label=f'Fitted Curve: Flux=({a02:.4f}±{err02[0]:.4f}) + ({b02:.4f}±{err02[1]:.4f})(cosθ)^2 (reduced χ^2:{reduced_chi_squared_02:.1f})')
+plt.plot(np.linspace(0, 1, 10000), model03(np.linspace(0, 1, 10000), b03), linewidth=0.5, label=f'Fitted Curve: Flux=({b03:.4f}±{err03[0]:.4f})(cosθ)^2 (reduced χ^2:{reduced_chi_squared_03:.1f})')
 
 plt.title("Flux vs. Average Cosine of Zenith Angle")
 plt.xlabel(r"$\cos\theta$")
