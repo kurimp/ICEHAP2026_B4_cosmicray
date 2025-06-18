@@ -13,7 +13,18 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 #実験結果をまとめた最新ファイルを参照し、データフレーム化。
 result_filename_list = natsorted(glob.glob('./pocket_counter_output/results/*.csv'))
 result_filename = result_filename_list[-1]
-df_res = pd.read_csv(result_filename, sep='\t', header = 0)
+df_res_base = pd.read_csv(result_filename, sep='\t', header = 0)
+
+# df_for_list を使わず、df_res_base から直接集計する
+df_res = df_res_base.groupby(['x(cm)', 'h(cm)']).agg(
+    duration=('duration', 'sum'),
+    totalcount=('totalcount', 'sum')
+).reset_index() # groupbyのキーを列に戻す
+
+df_res['mean'] = df_res['totalcount'] / df_res['duration']
+df_res['std'] = np.sqrt(df_res['totalcount']) / df_res['duration']
+
+print(df_res)
 
 #シミュレーション結果をまとめた最新ファイルを参照し、データフレーム化。
 sim_filename_list = natsorted(glob.glob('./CosmicRaySimulation/CosmicRaySimulation_flux.csv'))
@@ -62,16 +73,8 @@ df_res.to_csv("Result.csv")
 #実験結果のフレームについて、Fluxが0以上の数なっていない行を削除。
 df_res = df_res[(df_res["Mean_Flux"]>=0)]
 
-df_res_h10_COM3 = df_res[(df_res["h(cm)"]==10)&((df_res["COM"]=="COM3"))]
-df_res_h10_COM4 = df_res[(df_res["h(cm)"]==10)&((df_res["COM"]=="COM4"))]
-df_res_h10_COM5 = df_res[(df_res["h(cm)"]==10)&((df_res["COM"]=="COM5"))]
-df_res_h10_COM8 = df_res[(df_res["h(cm)"]==10)&((df_res["COM"]=="COM8"))]
-df_res_h10_COM19 = df_res[(df_res["h(cm)"]==10)&((df_res["COM"]=="COM19"))]
-df_res_h325_COM3 = df_res[(df_res["h(cm)"]==32.5)&((df_res["COM"]=="COM3"))]
-df_res_h325_COM4 = df_res[(df_res["h(cm)"]==32.5)&((df_res["COM"]=="COM4"))]
-df_res_h325_COM5 = df_res[(df_res["h(cm)"]==32.5)&((df_res["COM"]=="COM5"))]
-df_res_h325_COM8 = df_res[(df_res["h(cm)"]==32.5)&((df_res["COM"]=="COM8"))]
-df_res_h325_COM19 = df_res[(df_res["h(cm)"]==32.5)&((df_res["COM"]=="COM19"))]
+df_res_h10 = df_res[(df_res["h(cm)"]==10)]
+df_res_h325 = df_res[(df_res["h(cm)"]==32.5)]
 
 print(df_res)
 
@@ -102,18 +105,8 @@ plt.style.use("ggplot")
 
 plt.errorbar(df_res['Mean_CosTheta_CosSquaredTheta'], df_res["Mean_Flux"], xerr=df_res['Std_CosTheta_CosSquaredTheta'], yerr=df_res["Std_Flux"], fmt='none', ecolor='black', elinewidth=0.5, capsize=1, label='std', alpha=0.8, zorder=1)
 
-plt.scatter(df_res_h10_COM3['Mean_CosTheta_CosSquaredTheta'], df_res_h10_COM3["Mean_Flux"], marker = "x", label="Mean(h=10cm, COM3)", color = "red", s=15)
-plt.scatter(df_res_h10_COM4['Mean_CosTheta_CosSquaredTheta'], df_res_h10_COM4["Mean_Flux"], marker = "1", label="Mean(h=10cm, COM4)", color = "red")
-plt.scatter(df_res_h10_COM5['Mean_CosTheta_CosSquaredTheta'], df_res_h10_COM5["Mean_Flux"], marker = "2", label="Mean(h=10cm, COM5)", color = "red")
-plt.scatter(df_res_h10_COM8['Mean_CosTheta_CosSquaredTheta'], df_res_h10_COM8["Mean_Flux"], marker = "3", label="Mean(h=10cm, COM8)", color = "red")
-plt.scatter(df_res_h10_COM19['Mean_CosTheta_CosSquaredTheta'], df_res_h10_COM19["Mean_Flux"], marker = "4", label="Mean(h=10cm, COM19)", color = "red")
-
-plt.scatter(df_res_h325_COM3['Mean_CosTheta_CosSquaredTheta'], df_res_h325_COM3["Mean_Flux"], marker = "x", label="Mean(h=32.5cm, COM3)", color = "blue", s=15)
-plt.scatter(df_res_h325_COM4['Mean_CosTheta_CosSquaredTheta'], df_res_h325_COM4["Mean_Flux"], marker = "1", label="Mean(h=32.5cm, COM4)", color = "blue")
-plt.scatter(df_res_h325_COM5['Mean_CosTheta_CosSquaredTheta'], df_res_h325_COM5["Mean_Flux"], marker = "2", label="Mean(h=32.5cm, COM5)", color = "blue")
-plt.scatter(df_res_h325_COM8['Mean_CosTheta_CosSquaredTheta'], df_res_h325_COM8["Mean_Flux"], marker = "3", label="Mean(h=32.5cm, COM8)", color = "blue")
-plt.scatter(df_res_h325_COM19['Mean_CosTheta_CosSquaredTheta'], df_res_h325_COM19["Mean_Flux"], marker = "4", label="Mean(h=32.5cm, COM19)", color = "blue")
-#plt.scatter(df_res_h325['Mean_CosTheta_CosSquaredTheta'], df_res_h325["Mean_Flux"], marker = "x", label="Mean(h=32.5cm)")
+plt.scatter(df_res_h10['Mean_CosTheta_CosSquaredTheta'], df_res_h10["Mean_Flux"], marker = "x", label="Mean(h=10cm)")
+plt.scatter(df_res_h325['Mean_CosTheta_CosSquaredTheta'], df_res_h325["Mean_Flux"], marker = "x", label="Mean(h=32.5cm)")
 
 
 
