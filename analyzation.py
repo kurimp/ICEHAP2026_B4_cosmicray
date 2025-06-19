@@ -15,11 +15,50 @@ result_filename_list = natsorted(glob.glob('./pocket_counter_output/results/*.cs
 result_filename = result_filename_list[-1]
 df_res_base = pd.read_csv(result_filename, sep='\t', header = 0)
 
+#検出器のefficiencyデータを参照し、データフレーム化。
+eff_filename = './performance/results/performance.csv'
+df_eff = pd.read_csv(eff_filename, sep='\t')
+eff_dict = df_eff.set_index('COM')['value'].to_dict()
+
+# 1. 重み定義DataFrameから、COMの種類と重み係数のマップ（辞書）を作成
+# set_indexでCOM_typeをインデックスにし、weight_factor列を選択してto_dict()で辞書化
+com_weights_map = df_eff.set_index('COM')['value'].to_dict()
+
+print("\n--- 作成されたCOMタイプと重みのマップ (辞書) ---")
+print(com_weights_map)
+print("-" * 30)
+
+# 2. 'COM' 列の値をキーとして、対応する重み係数を取得する新しいSeriesを作成
+# map() メソッドは、Seriesの値を使って、辞書のキーに対応する値をルックアップします。
+# マップに存在しないCOMタイプ (例: 'COM4', 'COM9') の場合は NaN になります。
+mapped_weights = df_res_base['COM'].map(com_weights_map)
+
+print("\n--- df_data['COM']にマップされた重み ---")
+print(mapped_weights)
+print("-" * 30)
+
+# 3. totalcount 列に重みを適用
+# NaNでない場合にのみ掛け算を適用するための処理
+# オプション: 元の値を保持しつつ、重みがない場合はNaNを結果にしたい場合
+# df_data['weighted_totalcount'] = df_data['totalcount'] * mapped_weights
+
+# 推奨: 重みが設定されていないCOMタイプの場合は、totalcountをそのまま残す（または別のデフォルト値を設定）
+# mapped_weights の NaN を 1.0 (重みなし) に置き換える
+final_weights = mapped_weights.fillna(1.0) # 重みがない場合は1倍（元の値のまま）
+
+# totalcount 列を更新 (または新しい列を作成)
+df_res_base['totalcount_weighted'] = df_res_base['totalcount'] * final_weights
+
+print("\n--- 重みづけ後のDataFrame (df_data) ---")
+print(df_res_base)
+
 # df_for_list を使わず、df_res_base から直接集計する
 df_res = df_res_base.groupby(['x(cm)', 'h(cm)']).agg(
     duration=('duration', 'sum'),
-    totalcount=('totalcount', 'sum')
+    totalcount=('totalcount_weighted', 'sum')
 ).reset_index() # groupbyのキーを列に戻す
+
+print(df_res)
 
 df_res['mean'] = df_res['totalcount'] / df_res['duration']
 df_res['std'] = np.sqrt(df_res['totalcount']) / df_res['duration']
