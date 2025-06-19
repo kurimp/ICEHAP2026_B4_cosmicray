@@ -6,6 +6,7 @@ import glob #ファイル探索
 from natsort import natsorted #ソート
 import pandas as pd
 from scipy.optimize import curve_fit
+from scipy.stats import chi2
 
 #カレントディレクトリを本ファイルが存在するフォルダに変更。
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -58,12 +59,8 @@ df_res = df_res_base.groupby(['x(cm)', 'h(cm)']).agg(
     totalcount=('totalcount_weighted', 'sum')
 ).reset_index() # groupbyのキーを列に戻す
 
-print(df_res)
-
 df_res['mean'] = df_res['totalcount'] / df_res['duration']
 df_res['std'] = np.sqrt(df_res['totalcount']) / df_res['duration']
-
-print(df_res)
 
 #シミュレーション結果をまとめた最新ファイルを参照し、データフレーム化。
 sim_filename_list = natsorted(glob.glob('./CosmicRaySimulation/CosmicRaySimulation_flux.csv'))
@@ -85,7 +82,6 @@ df_res = pd.merge(df_res, df_sim[['plate1_move_x(cm)', 'plate1_move_z(cm)', 'Mea
 def stat_err_01(M1, e1, M2, e2):
   Nres = M1/M2
   eres = np.sqrt(np.power((1/M2*e1), 2)+np.power((M1/(np.power(M2, 2))*e2),2))
-  print(Nres, eres)
   return Nres, eres
 
 #(M1±ε1)-(M2±ε2)の計算において統計誤差を算出する関数
@@ -107,13 +103,16 @@ df_res["Std_Flux"] = calc_list[1]/100
 
 df_res.to_csv("Result.csv")
 
-#実験結果のフレームについて、Fluxが0以上の数なっていない行を削除。
-df_res = df_res[(df_res["Mean_Flux"]>=0)]
+print(df_res)
+
+#実験結果のフレームについて、Fluxが0以上の数になっていない行を削除。
+df_res = df_res[(df_res["Mean_Flux"].notna())]
+
+print(df_res)
 
 df_res_h10 = df_res[(df_res["h(cm)"]==10)]
 df_res_h325 = df_res[(df_res["h(cm)"]==32.5)]
-
-print(df_res)
+df_res_h45 = df_res[(df_res["h(cm)"]==45)]
 
 #フィット
 def model01(x, a, b, n):
@@ -165,6 +164,31 @@ reduced_chi_squared_01 = chi_squared_01 / degrees_of_freedom_01
 reduced_chi_squared_02 = chi_squared_02 / degrees_of_freedom_02
 reduced_chi_squared_03 = chi_squared_03 / degrees_of_freedom_03
 
+# P値の計算
+p_value_01 = 1 - chi2.cdf(chi_squared_01, degrees_of_freedom_01)
+p_value_02 = 1 - chi2.cdf(chi_squared_02, degrees_of_freedom_02)
+p_value_03 = 1 - chi2.cdf(chi_squared_03, degrees_of_freedom_03)
+
+print(f"\n--- Chi-squared Test Results ---")
+print(f"Model 01 (a + b*x^n):")
+print(f"  Chi-squared: {chi_squared_01:.2f}")
+print(f"  Degrees of Freedom: {degrees_of_freedom_01}")
+print(f"  Reduced Chi-squared: {reduced_chi_squared_01:.2f}")
+print(f"  P-value: {p_value_01:.4f}")
+
+print(f"\nModel 02 (a + b*x^2):")
+print(f"  Chi-squared: {chi_squared_02:.2f}")
+print(f"  Degrees of Freedom: {degrees_of_freedom_02}")
+print(f"  Reduced Chi-squared: {reduced_chi_squared_02:.2f}")
+print(f"  P-value: {p_value_02:.4f}")
+
+print(f"\nModel 03 (b*x^2):")
+print(f"  Chi-squared: {chi_squared_03:.2f}")
+print(f"  Degrees of Freedom: {degrees_of_freedom_03}")
+print(f"  Reduced Chi-squared: {reduced_chi_squared_03:.2f}")
+print(f"  P-value: {p_value_03:.4f}")
+print("-" * 30)
+
 #グラフの生成
 plt.figure(figsize=(12, 6)) # グラフのサイズを調整
 plt.style.use("ggplot")
@@ -173,6 +197,7 @@ plt.errorbar(df_res['Mean_CosTheta_CosSquaredTheta'], df_res["Mean_Flux"], xerr=
 
 plt.scatter(df_res_h10['Mean_CosTheta_CosSquaredTheta'], df_res_h10["Mean_Flux"], marker = "x", label="Mean(h=10cm)")
 plt.scatter(df_res_h325['Mean_CosTheta_CosSquaredTheta'], df_res_h325["Mean_Flux"], marker = "x", label="Mean(h=32.5cm)")
+plt.scatter(df_res_h45['Mean_CosTheta_CosSquaredTheta'], df_res_h45["Mean_Flux"], marker = "x", label="Mean(mayoko)")
 
 plt.plot(np.linspace(0, 1, 10000), model01(np.linspace(0, 1, 10000), a01, b01, n01), linewidth=0.5,label=f'Fitted Curve: Flux=({a01:.4f}±{err01[0]:.4f}) + ({b01:.4f}±{err01[1]:.4f})(cosθ)^({n01:.4f}±{err01[2]:.4f}) (reduced χ^2:{reduced_chi_squared_01:.1f})')
 plt.plot(np.linspace(0, 1, 10000), model02(np.linspace(0, 1, 10000), a02, b02), linewidth=0.5, label=f'Fitted Curve: Flux=({a02:.4f}±{err02[0]:.4f}) + ({b02:.4f}±{err02[1]:.4f})(cosθ)^2 (reduced χ^2:{reduced_chi_squared_02:.1f})')

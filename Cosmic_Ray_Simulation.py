@@ -5,27 +5,64 @@ from scipy.integrate import dblquad
 from tqdm import tqdm
 from scipy.optimize import curve_fit
 import os
+import configparser # 設定ファイルを扱うためのモジュール
 
-#カレントディレクトリを本ファイルが存在するフォルダに変更。
+# カレントディレクトリを本ファイルが存在するフォルダに変更。
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+# --- シミュレーション設定 (プログラムに直接記述) ---
+# これらの値がシミュレーションで使用され、
+# そのまま simulation_config.cfg ファイルに出力されます。
 
 # 板の情報
 plate_thickness = 1.0   # cm (このコードでは未使用)
 plate_side = 10.0       # cm
-#plate1_z = 32.5       # cm
 plate2_z = 0.0          # cm
 
 # plate1 の x,y 方向の移動量及びzの値を定義
-plate1_move_x_values = np.linspace(0, 50, 51)
+plate1_move_x_values_start = 0.0
+plate1_move_x_values_end = 50.0
+plate1_move_x_values_num = 51
 plate1_move_y = 0.0     # cm
-plate1_move_z_values = [10, 32.5]
+plate1_move_z_values = [10, 32.5, 45] # cm - リスト
 
 # 実験のパラメータ
-collection_time = 60 * 60 * 24  # 秒
-detector_area = plate_side * plate_side  # cm^2
-cosmicray_rate = 0.8 # 板の間隔0 cmでのCoincidence/100cm^2/sr/s
+collection_time = 60 * 60 * 1  # 計測時間(s)
+cosmicray_rate = 0.7 # 板の間隔0 cmでのCoincidence/100cm^2/sr/s
 
-# 宇宙線の発生数を設定
+# 出力ディレクトリ
+output_dir = 'CosmicRaySimulation'
+
+# プログラム内の設定値を simulation_config.cfg に出力
+config = configparser.ConfigParser()
+config_file_path = 'simulation_config.cfg'
+
+config['SIMULATION_PARAMS'] = {
+    'plate_thickness': str(plate_thickness),
+    'plate_side': str(plate_side),
+    'plate2_z': str(plate2_z),
+    'plate1_move_x_values_start': str(plate1_move_x_values_start),
+    'plate1_move_x_values_end': str(plate1_move_x_values_end),
+    'plate1_move_x_values_num': str(plate1_move_x_values_num),
+    'plate1_move_y': str(plate1_move_y),
+    'plate1_move_z_values': ','.join(map(str, plate1_move_z_values)), # リストをカンマ区切り文字列に変換
+    'collection_time': str(collection_time),
+    'cosmicray_rate': str(cosmicray_rate),
+    'output_dir': output_dir
+}
+
+with open(config_file_path, 'w') as configfile:
+    config.write(configfile)
+print(f"現在のシミュレーション設定が '{config_file_path}' に出力されました。")
+
+plate1_move_x_values = np.linspace(
+    plate1_move_x_values_start,
+    plate1_move_x_values_end,
+    int(plate1_move_x_values_num)
+)
+
+# 宇宙線の発生数を設定 
+detector_area = plate_side * plate_side  # cm^2
 num_cosmic_rays =  int(cosmicray_rate * collection_time)
 
 # 宇宙線の発生源となる板1上の点をランダムに生成する関数
